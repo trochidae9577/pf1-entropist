@@ -1,0 +1,78 @@
+{
+  "files": [
+    {
+      "file": "操念使原力_以太元素.md",
+      "sha256": "8459255ed32301427200ce65644bdb1ac101ae95d025755850a3810e59ca9b8e",
+      "bytes": 36010
+    },
+    {
+      "file": "操念使原力_光元素.md",
+      "sha256": "355c14536d9f689efef8b39971e7bde2ead1f49ed768ebed72eb436d787c78f4",
+      "bytes": 41121
+    },
+    {
+      "file": "操念使原力_土元素.md",
+      "sha256": "1861cdb25be4dadbea1eb45d35f9f583d0dedf33184f385189b7afe99c5ee6b4",
+      "bytes": 39084
+    },
+    {
+      "file": "操念使原力_时间元素.md",
+      "sha256": "b284780fb0bc11109b63dbc1d5488eebf0599834788c3706b8c84770d08f76e3",
+      "bytes": 33378
+    },
+    {
+      "file": "操念使原力_木元素.md",
+      "sha256": "d4c7393b0f96423087b2722fd057d412ac8ecda3349ed561b0e2e3ed7c0548c0",
+      "bytes": 38450
+    },
+    {
+      "file": "操念使原力_毒元素.md",
+      "sha256": "cae8d7c3569b28f4ce4d7d6f23e29a97d72871c133ca18dd0d60898aca83020b",
+      "bytes": 38415
+    },
+    {
+      "file": "操念使原力_气元素.md",
+      "sha256": "dac727f0adf7d94c00eb5af873a3ee92e7710f0a21bb3099b52c105dd5c708cc",
+      "bytes": 30938
+    },
+    {
+      "file": "操念使原力_水元素.md",
+      "sha256": "a0d302cccec5789f598c3b11f3247be68840f54d274cff6f861d9dd60b35d21f",
+      "bytes": 44931
+    },
+    {
+      "file": "操念使原力_火元素.md",
+      "sha256": "e23bb7e952b88540e70d827b70a023d4ace4e4b0387ee939aa8227d259d44435",
+      "bytes": 31867
+    },
+    {
+      "file": "操念使原力_脏腑元素.md",
+      "sha256": "4d527a36cc62184062cbf15d7cb26e1fabf266d70f5ec35a1a5532ab1555fb45",
+      "bytes": 56268
+    },
+    {
+      "file": "操念使原力_虚空元素.md",
+      "sha256": "00afdbfe1357131c2b3b56c520d30885689dbafb99ae658817cbe68b7c0d452a",
+      "bytes": 47888
+    },
+    {
+      "file": "操念使原力_通用部分.md",
+      "sha256": "4b42014ffb79ff76ce9f66e5ae293a8a23f077801a85c8fdefec1051f95e848c",
+      "bytes": 20663
+    },
+    {
+      "file": "操念使原力_音元素.md",
+      "sha256": "629808d1f52ed3a4761fddd2d8ac8e028c5db68d5ebf975723c2cf3bf9b718e1",
+      "bytes": 36947
+    },
+    {
+      "file": "操念使第三方变体职业.md",
+      "sha256": "6b51289e6cc4ce72bc23a055820f13787150e4ffedd24357984a8a34e687fd3a",
+      "bytes": 85305
+    }
+  ],
+  "fullEntries": 477,
+  "indexOnly": 288,
+  "feats": 3,
+  "ambiguous": []
+}
