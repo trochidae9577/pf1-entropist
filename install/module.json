@@ -1,0 +1,15 @@
+{
+  "id": "pf1-entropist",
+  "title": "PF1 熵术士：原力准备与每日专注",
+  "description": "体质原力准备、每日流转专注、偏好专注、三项专长与 DC 明细。原型版。",
+  "version": "0.4.2",
+  "authors": [{"name": "PF1 Entropist contributors"}],
+  "compatibility": {"minimum": "13", "maximum": "13"},
+  "relationships": {"systems": [{"id": "pf1", "type": "system", "compatibility": {"minimum": "11.11", "maximum": "11.11"}}]},
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/entropist.css"],
+  "license": "LICENSE.txt",
+  "url": "https://github.com/trochidae9577/pf1-entropist",
+  "manifest": "https://cdn.jsdelivr.net/gh/trochidae9577/pf1-entropist@main/install/module.json",
+  "download": "https://cdn.jsdelivr.net/gh/trochidae9577/pf1-entropist@main/dist/pf1-entropist-0.4.2.zip"
+}

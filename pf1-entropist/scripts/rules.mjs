@@ -1,5 +1,5 @@
 export const ID = 'pf1-entropist';
-export const VERSION = '0.4.1';
+export const VERSION = '0.4.2';
 export const ELEMENTS = ['气','土','火','水','以太','光','时间','虚空','毒','音','脏腑','木'];
 export const ARRAYS = {elemental:['气','土','火','水'],esoteric:['以太','光','时间','虚空'],material:['毒','音','脏腑','木']};
 export const ARRAY_NAMES = {elemental:'元素组列',esoteric:'奥秘组列',material:'物质组列'};

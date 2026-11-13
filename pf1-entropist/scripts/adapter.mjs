@@ -114,7 +114,11 @@ export async function ensureSpellbook(actor){
 
 function checkBook(actor,key,book,requireName=true){
   assert(book&&(!requireName||book.name==='熵术士原力'),'该法术书已被重新配置，请保留现有法术书并核对熵术士绑定');
-  for(let rank=0;rank<=9;rank++)assert(Object.hasOwn(book.spells?.[`spell${rank}`]??{},'base'),'PF1 法术书缺少手动环级字段');
+  // PF1 11.11's template provides rank records without a base value until one is set.
+  for(let rank=0;rank<=9;rank++){
+    const level=book.spells?.[`spell${rank}`];
+    assert(level&&typeof level==='object'&&!Array.isArray(level),'PF1 法术书缺少环级结构');
+  }
   const foreign=Array.from(actor.items).some(item=>item.type==='spell'&&item.system.spellbook===key&&!item.getFlag(ID,'talentId'));
   assert(!foreign,'该法术书含有其他法术，请先为熵术士留出独立法术书');
 }

@@ -2,7 +2,7 @@ import {ID,FEAT,ELEMENTS,arrayElements,integer,assert,availableLevel,makeDaily,c
 import {readState,actorStats,featCounts,capacities,serializeActor,transact,makeSpell,ensureSpellbook,syncSpellbook,markdown,talentDescription,escapeHTML as e} from './adapter.mjs';
 import {availablePowers,blastKind,comboBurn,favoredElements,matchesInfusion,simpleBlasts} from './powers.mjs';
 import {saveControls,saveType,targetSnapshots,utilitySave} from './saves.mjs';
-import {renderPanel} from './view.mjs';
+import {renderPanel,updateArrayFields} from './view.mjs';
 export function ask(title,body,label='确认'){
   return new Promise(resolve=>{let settled=false;const finish=v=>{if(!settled){settled=true;resolve(v);}};
     new Dialog({title,content:`<form class="entropist-dialog">${body}</form>`,buttons:{ok:{label,callback:html=>{const root=html[0]??html;finish(Object.fromEntries(new FormData(root.querySelector('form'))));}},cancel:{label:'取消',callback:()=>finish(null)}},default:'ok',close:()=>finish(null)},{width:520}).render(true);
@@ -45,6 +45,8 @@ export class Controller{
     root.addEventListener('change',async event=>{
       const el=event.target;
       if(el.dataset.filter){view.ui[el.dataset.filter]=el.type==='checkbox'?el.checked:el.value;render();return;}
+      if(el.matches('[name="array"], [data-array-element]'))updateArrayFields(el.form);
+      if(el.matches('[data-favored-focus]'))el.dataset.touched='true';
       if(el.dataset.prepare){try{await this.prepare(actor,el.dataset.prepare,el.value);await this.syncBook(actor);render();}catch(err){notify(err.message);render();}}
     });
     root.addEventListener('submit',async event=>{
@@ -87,21 +89,28 @@ export class Controller{
     return transact(actor,s=>{
       const previousArray=arrayElements(s).join('、');
       s.array=values.array;s.classId=values.classId??'';s.levelOverride=values.levelOverride===''?null:integer(values.levelOverride,1,20,'职业等级');
-      if(s.array==='custom'&&game.user.isGM){
+      if(s.array==='custom'){
         s.customArray=Array.from({length:4},(_,i)=>values[`array${i+1}`]);
       }
       const elements=arrayElements(s);
       assert(elements.length===4&&new Set(elements).size===4&&elements.every(x=>ELEMENTS.includes(x)),'请选择四种不同的组列元素');
       const stats=actorStats(actor,s);assert(stats.level>=1,'没有识别到操念使职业，请绑定职业或填入等级');
+      const arrayChanged=previousArray!==elements.join('、');
       const favored=[values.favored1,values.favored2].filter(Boolean);
-      assert(!values.favored2||values.favored1,'请先选择第一偏好专注');
+      assert(arrayChanged||!values.favored2||values.favored1,'请先选择第一偏好专注');
       assert(favored.length<=(stats.level>=15?2:stats.level>=7?1:0),'职业等级不足以选择这些偏好专注');
       assert(new Set(favored).size===favored.length,'两种偏好专注不能相同');
       assert(favored.every(x=>arrayElements(s).includes(x)),'偏好专注必须属于位面组列');
-      assert(game.user.isGM||favoredElements(s,stats.level).every((element,index)=>favored[index]===element),'已确认的偏好专注只能由 GM 更正');
-      if(previousArray!==elements.join('、')&&s.daily){
-        assert(game.user.isGM,'当日专注已经确定，组列变更需要 GM 操作');
+      const previousFavored=favoredElements(s,stats.level);
+      const preservesFavored=arrayChanged
+        ?previousFavored.every(element=>!elements.includes(element)||favored.includes(element))
+        :previousFavored.every((element,index)=>favored[index]===element);
+      assert(game.user.isGM||preservesFavored,'组列中已确认的偏好专注只能由 GM 更正');
+      if(arrayChanged){
         s.daily=null;s.previous=null;s.temporary=null;
+        for(const talent of this.catalog.talents){
+          if(s.prepared[talent.id]&&!talent.elements.some(element=>elements.includes(element)||['通用','泛用'].includes(element)))delete s.prepared[talent.id];
+        }
       }
       s.favored=favored;s.binding={energy:values.energy??'',physical:values.physical??''};s.heirloom=values.heirloom==='on';
       s.extraSlots=(values.extraSlots??'').split(/[，,\s]+/).filter(Boolean).map(x=>integer(x,1,9,'额外准备位等级'));

@@ -3,6 +3,17 @@ import {escapeHTML as e} from './adapter.mjs';
 import {favoredElements,simpleBlasts} from './powers.mjs';
 const option=(value,label,selected)=>`<option value="${e(value)}" ${String(value)===String(selected)?'selected':''}>${e(label)}</option>`;
 function field(name,label,value,type='text'){return `<label>${label}<input name="${name}" type="${type}" value="${e(value)}"></label>`;}
+export function updateArrayFields(form){
+  const custom=form.elements.array.value==='custom';
+  const fields=form.querySelector('[data-custom-array]');
+  fields.hidden=!custom;
+  const elements=custom?[...new Set([...fields.querySelectorAll('select')].map(select=>select.value))]:arrayElements({array:form.elements.array.value});
+  for(const select of form.querySelectorAll('[data-favored-focus]')){
+    const saved=select.dataset.favoredFocus;
+    const selected=select.value||(!select.dataset.touched?saved:'');
+    select.innerHTML=option('','未选择',selected)+elements.map(element=>option(element,element,selected)).join('');
+  }
+}
 export function renderPanel(model,ui={}){
   const {actor,state,stats,feats,catalog,capacities:slots,error}=model;
   const arr=arrayElements(state),owned=new Set(model.learned),filter=ui.search??'';
@@ -16,8 +27,8 @@ export function renderPanel(model,ui={}){
   const known=catalog.talents.filter(t=>owned.has(t.id));
   const powers=[...model.powers.values()];
   const isGM=!!globalThis.game?.user?.isGM;
-  const customOptions=isGM||state.array==='custom'?option('custom','自定义组列',state.array):'';
-  const customFields=isGM?Array.from({length:4},(_,i)=>`<label>自定义 D4 点数 ${i+1}<select name="array${i+1}">${ELEMENTS.map(el=>option(el,el,state.customArray?.[i]??arr[i])).join('')}</select></label>`).join(''):'';
+  const customFields=Array.from({length:4},(_,i)=>`<label>D4 点数 ${i+1}<select name="array${i+1}" data-array-element>${ELEMENTS.map(el=>option(el,el,state.customArray?.[i]??arr[i])).join('')}</select></label>`).join('');
+  const favoredField=(index,level)=>`<label>第${index===0?'一':'二'}偏好专注（${level} 级）<select name="favored${index+1}" data-favored-focus="${e(state.favored[index]??'')}" ${stats.level<level?'disabled':''}>${option('','未选择',state.favored[index])}${arr.map(el=>option(el,el,state.favored[index])).join('')}</select></label>`;
   const favored=favoredElements(state,stats.level);
   const dailyBlasts=simpleBlasts(catalog.talents,state.daily?.element);
   const dailyNeedsBlast=state.heirloom&&dailyBlasts.length>1&&!favored.includes(state.daily.element)&&!dailyBlasts.some(t=>t.id===state.daily.blastId);
@@ -49,7 +60,7 @@ export function renderPanel(model,ui={}){
     <h3>原有念袭</h3><div class="toolbar"><button data-do="blast" data-kind="energy">调用已绑定能量念袭</button><button data-do="blast" data-kind="physical">调用已绑定物理念袭</button></div><p class="hint">先选择可用念袭和注能，再使用原 PF 攻击。注能的豁免和效果见组合卡。</p>
   </section>`:''}
   ${ui.tab==='library'?`<section><div class="filters"><input data-filter="search" value="${e(filter)}" placeholder="搜索中文或英文名称"><select data-filter="element">${option('','全部元素',element)}${['泛用',...ELEMENTS].map(x=>option(x,x,element)).join('')}</select><select data-filter="kind">${option('','全部类别',kind)}${Object.entries(LABELS).map(([v,n])=>option(v,n,kind)).join('')}</select><label><input type="checkbox" data-filter="learnedOnly" ${ui.learnedOnly?'checked':''}>只看已掌握</label></div><p class="hint">${catalog.talents.length} 个版本条目；同名不同版本分别保留。每页最多显示 120 项，请用筛选定位。“仅索引”不能自动施放。</p><div class="cards">${rows.map(t=>`<article><h3>${e(t.name)}</h3><small>${e(t.en)} · ${e(t.elements.join('／'))}</small><p>${e(LABELS[t.kind])} · ${t.level??'动态'} 级 · 超载 ${e(burnLabel(t))}</p><span class="badge">${t.incomplete?'仅索引':'正文可查 · 效果手动'}</span><div><button data-do="detail" data-id="${t.id}">规则正文</button><button data-do="learn" data-id="${t.id}" ${owned.has(t.id)||t.incomplete?'disabled':''}>${owned.has(t.id)?'已掌握':'学习／导入'}</button></div></article>`).join('')}</div></section>`:''}
-  ${ui.tab==='settings'?`<section><form data-form="settings"><div class="form-grid"><label>位面组列<select name="array">${Object.entries(ARRAY_NAMES).map(([v,n])=>option(v,n,state.array)).join('')}${customOptions}</select></label><label>绑定职业<select name="classId">${option('','自动识别操念使',state.classId)}${model.classes.map(c=>option(c.id,c.name,state.classId)).join('')}</select></label>${field('levelOverride','手动职业等级（留空自动）',state.levelOverride??'','number')}<label>第一偏好专注（7 级）<select name="favored1" ${stats.level<7?'disabled':''}>${option('','未选择',state.favored[0])}${arr.map(x=>option(x,x,state.favored[0])).join('')}</select></label><label>第二偏好专注（15 级）<select name="favored2" ${stats.level<15?'disabled':''}>${option('','未选择',state.favored[1])}${arr.map(x=>option(x,x,state.favored[1])).join('')}</select></label>${selectAttack('energy','能量念袭条目',state.binding.energy)}${selectAttack('physical','物理念袭条目',state.binding.physical)}${field('extraSlots','额外原力位分配（例：1,2）',state.extraSlots.join(','))}<label><input type="checkbox" name="heirloom" ${state.heirloom?'checked':''}>持有同调传承物</label>${customFields}</div><button type="submit">保存并确认偏好专注</button></form>
+  ${ui.tab==='settings'?`<section><form data-form="settings"><label>位面组列<select name="array">${Object.entries(ARRAY_NAMES).map(([v,n])=>option(v,n,state.array)).join('')}${option('custom','自定义组列',state.array)}</select></label><fieldset data-custom-array ${state.array==='custom'?'':'hidden'}><legend>自定义 D4 对应</legend><div class="form-grid">${customFields}</div></fieldset><p class="hint">更改组列后需重新确定流转专注。移出组列的原力会解除准备。</p><div class="form-grid"><label>绑定职业<select name="classId">${option('','自动识别操念使',state.classId)}${model.classes.map(c=>option(c.id,c.name,state.classId)).join('')}</select></label>${field('levelOverride','手动职业等级（留空自动）',state.levelOverride??'','number')}${favoredField(0,7)}${favoredField(1,15)}${selectAttack('energy','能量念袭条目',state.binding.energy)}${selectAttack('physical','物理念袭条目',state.binding.physical)}${field('extraSlots','额外原力位分配（例：1,2）',state.extraSlots.join(','))}<label><input type="checkbox" name="heirloom" ${state.heirloom?'checked':''}>持有同调传承物</label></div><button type="submit">保存并确认偏好专注</button></form>
   ${favoredBlastFields.length?`<h3>偏好专注的简易念袭</h3><form data-form="favored-blasts"><div class="form-grid">${favoredBlastFields.join('')}</div>${favoredBlastFields.some(field=>field.startsWith('<label>'))?'<button type="submit">确认偏好念袭</button>':''}</form>`:''}
   <h3>专长</h3><div class="toolbar">${catalog.feats.map((f,i)=>`<button data-do="feat" data-id="${f.id}">添加${featNames[i]}</button>`).join('')}</div><p>额外原力位 × ${feats.extra} · 自发原力 ${feats.spontaneous?'已取得':'未取得'}（今日已用 ${state.spontaneousUsed} 次） · 适应性通用原力 ${feats.adaptive?'已取得':'未取得'}</p><div class="toolbar"><button data-do="book">接入体质准备法术书</button><button data-do="feature">导入熵术士职业说明</button><button data-do="macros">建立快捷宏</button></div></section>`:''}
   </div>`;
