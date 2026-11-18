@@ -1,4 +1,4 @@
-import {ID,DEFAULT_STATE,FEAT,slotCapacity,assert,burnLabel} from './rules.mjs';
+import {ID,activePreparation,DEFAULT_STATE,FEAT,availableLevel,slotCapacity,assert,burnLabel} from './rules.mjs';
 const queues=new Map();
 export function readState(actor){
   const raw=actor.getFlag(ID,'state');let data={};
@@ -19,19 +19,33 @@ export function actorStats(actor,state=readState(actor)){
   const classes=Array.from(actor.items??[]).filter(i=>i.type==='class');
   const cls=classes.find(i=>i.id===state.classId)??classes.find(i=>/kineticist|entropist|操念使|熵术士/i.test((i.system.tag??'')+' '+i.name));
   const level=state.levelOverride??Number(cls?.system.level??0);
+  const standardClasses=classes.filter(c=>!['racial','mythic'].includes(c.subType));
+  const classTotal=standardClasses.reduce((sum,c)=>sum+Number(c.system.level??0),0);
+  const sheetTotal=Number(actor.system.details?.level?.value??classTotal);
+  let characterLevel=sheetTotal;
+  if(state.levelOverride!=null){
+    // Replace only the bound class's contribution, preserving multiclass levels.
+    const boundLevel=standardClasses.includes(cls)?Number(cls.system.level??0):0;
+    characterLevel=cls?Math.max(0,sheetTotal-boundLevel)+Number(level):Math.max(sheetTotal,Number(level));
+  }
   const con=actor.system.abilities?.con??{},dex=actor.system.abilities?.dex??{};
-  return {level:Number(level),constitution:Number(con.total??con.value??10),conMod:Number(con.mod??Math.floor(((con.total??con.value??10)-10)/2)),dexMod:Number(dex.mod??Math.floor(((dex.total??dex.value??10)-10)/2)),characterLevel:Number(actor.system.details?.level?.value??classes.reduce((n,c)=>n+Number(c.system.level??0),0)),classId:cls?.id??''};
+  return {level:Number(level),constitution:Number(con.total??con.value??10),conMod:Number(con.mod??Math.floor(((con.total??con.value??10)-10)/2)),dexMod:Number(dex.mod??Math.floor(((dex.total??dex.value??10)-10)/2)),characterLevel,classId:cls?.id??''};
 }
 export function featCounts(actor){
   const count={extra:0,spontaneous:0,adaptive:0};
   for(const item of actor.items??[])if(item.type==='feat')for(const [key,id]of Object.entries(FEAT))if(item.getFlag(ID,'featId')===id)count[key]++;
   return count;
 }
-export function capacities(actor,state=readState(actor)){
+export function capacities(actor,state=readState(actor),validateAllocation=false){
   const stats=actorStats(actor,state),feats=featCounts(actor);
   assert(stats.level>=1&&stats.level<=20,'先绑定操念使职业，或填写 1—20 的职业等级');
-  if(feats.extra)assert(stats.level>=5&&stats.constitution>=17,'额外原力位要求熵术士 5 级、体质 17');
-  return slotCapacity({level:stats.level,constitution:stats.constitution,state,extraCount:feats.extra});
+  const extraCount=stats.level>=5&&stats.constitution>=17?feats.extra:0;
+  const params={level:stats.level,constitution:stats.constitution,extraCount};
+  if(validateAllocation)return slotCapacity({...params,state});
+  const extraSlots=(state.extraSlots??[]).slice(0,2*extraCount).filter(rank=>rank<availableLevel(stats.level));
+  // A temporary level or ability loss can invalidate saved allocations.
+  try{return slotCapacity({...params,state:{...state,extraSlots}});}
+  catch{return slotCapacity({...params,state:{...state,extraSlots:[]}});}
 }
 export async function serializeActor(actor,operation){
   assert(actor.isOwner,'你没有修改该角色的权限');
@@ -92,7 +106,10 @@ export async function ensureSpellbook(actor){
     assert(Object.values(books).some(b=>!b.inUse),'现有法术书已占满，请为熵术士留出独立法术书');
     assert(typeof actor.createSpellbook==='function','当前系统未提供 createSpellbook 接口');
     const stats=actorStats(actor,state),cls=actor.items.get(stats.classId);
-    const proposal=await actor.createSpellbook({type:'prepared',ability:'con',spells:'psychic',class:cls?.system.tag??'kineticist',progression:'high',cantrips:false,domain:0},{commit:false});
+    const classTag=cls?.system.tag??'kineticist';
+    // PF1 refuses a second book when asked to look up an already active class.
+    const hasClassBook=Object.values(books).some(b=>b.inUse&&b.class===classTag);
+    const proposal=await actor.createSpellbook({type:'prepared',ability:'con',spells:'psychic',class:hasClassBook?undefined:classTag,progression:'high',cantrips:false,domain:0},{commit:false});
     assert(proposal&&typeof proposal==='object'&&proposal!==actor,'法术书预览接口返回值不符，已停止自动接入');
     const bookPath='system.attributes.spells.spellbooks';
     const changes=proposal.system?.attributes?.spells?.spellbooks??{};
@@ -104,6 +121,7 @@ export async function ensureSpellbook(actor){
     const fields=Object.fromEntries(Object.entries(book).map(([property,value])=>[`${bookPath}.${key}.${property}`,value]));
     await actor.update({
       ...fields,
+      [`${bookPath}.${key}.class`]:classTag,
       [`${bookPath}.${key}.name`]:'熵术士原力',
       ...bookProjection(key,slots),
       [`flags.${ID}.state`]:JSON.stringify({...state,bookKey:key})
@@ -139,6 +157,7 @@ export async function syncSpellbook(actor,catalog){
     if(!book?.inUse)return;
     checkBook(actor,key,book);
     const slots=capacities(actor,state);
+    const activeState=activePreparation(state,slots);
     const bookPatch=bookProjection(key,slots);
     const prefix=`system.attributes.spells.spellbooks.${key}.`;
     const changed=Object.fromEntries(Object.entries(bookPatch).filter(([path,value])=>path.slice(prefix.length).split('.').reduce((parent,part)=>parent?.[part],book)!==value));
@@ -147,7 +166,7 @@ export async function syncSpellbook(actor,catalog){
       const talent=catalog.find(t=>t.id===item.getFlag(ID,'talentId'));
       if(item.type!=='spell'||!talent)continue;
       const exempt=talent.exempt||['blast','composite','defense'].includes(talent.kind);
-      const prepared=state.prepared[talent.id]??(state.temporary?.id===talent.id?state.temporary.slot:null);
+      const prepared=activeState.prepared[talent.id]??(activeState.temporary?.id===talent.id?activeState.temporary.slot:null);
       const active=!exempt&&state.heirloom&&slots[prepared]>0;
       const rank=active?prepared:talent.level??0;
       const count=active?1:0;

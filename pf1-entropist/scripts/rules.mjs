@@ -1,10 +1,10 @@
 export const ID = 'pf1-entropist';
-export const VERSION = '0.4.2';
+export const VERSION = '0.5.0';
 export const ELEMENTS = ['气','土','火','水','以太','光','时间','虚空','毒','音','脏腑','木'];
 export const ARRAYS = {elemental:['气','土','火','水'],esoteric:['以太','光','时间','虚空'],material:['毒','音','脏腑','木']};
 export const ARRAY_NAMES = {elemental:'元素组列',esoteric:'奥秘组列',material:'物质组列'};
 export const FEAT = {extra:'extra-wild-talent-slot',spontaneous:'spontaneous-talent',adaptive:'adaptive-utility'};
-export const LABELS = {utility:'通用原力',form:'塑形注能',substance:'性质注能',infusion:'注能（类别待核）',defense:'护身原力',blast:'简易念袭',composite:'复合念袭'};
+export const LABELS = {utility:'通用原力',form:'塑形注能',substance:'性质注能',defense:'护身原力',blast:'简易念袭',composite:'复合念袭'};
 export const DEFAULT_STATE = {schema:2,array:'elemental',classId:'',levelOverride:null,favored:[],favoredBlasts:{},binding:{energy:'',physical:''},day:0,daily:null,previous:null,prepared:{},extraSlots:[],temporary:null,spontaneousUsed:0,heirloom:true,burn:0,roundBurn:0,roundKey:'',dayNote:''};
 export function assert(value,message){if(!value)throw new Error(message);}
 export function integer(value,min,max,label){const n=Number(value);assert(Number.isInteger(n)&&n>=min&&n<=max,`${label}应为 ${min}—${max} 的整数`);return n;}
@@ -84,6 +84,18 @@ export function calculateDC({talent,stats,state,focusLevel=stats.level,adaptive=
   const dc=10+levelTerm+attr+focus.modifier+effectiveCompetence+(Number(other)||0);
   return {dc,levelTerm,attribute:kind==='form'?'敏捷':'体质',attributeMod:attr,focus, heightened,competence:effectiveCompetence,other:Number(other)||0,cl:Math.max(1,k+focus.modifier),formula:`10 + ${levelTerm}（等级） + ${attr}（${kind==='form'?'敏捷':'体质'}） ${focus.modifier>=0?'+':'−'} ${Math.abs(focus.modifier)}（专注） + ${effectiveCompetence}（表现） + ${Number(other)||0}（其他）`};
 }
+// Keep overflow selections in the saved plan so capacity recovery restores them.
+export function activePreparation(state,capacities){
+  const left={...capacities},prepared={};
+  for(const [id,slot] of Object.entries(state.prepared)){
+    if(left[slot]>0){prepared[id]=slot;left[slot]--;}
+  }
+  const temporary=state.temporary&&left[state.temporary.slot]>0?state.temporary:null;
+  return {...state,prepared,temporary};
+}
+
+export function bufferCapacity(level){return level<6?0:level<11?1:level<16?2:3;}
+
 export function canPrepare(talent,slot,{stats,state,catalog,capacities,ignoreId=null}){
   assert(talent.name!=='防御扩充','熵术士不能选择防御扩充');
   assert(!talent.incomplete,'该条目只有选用表名称，没有完整正文');

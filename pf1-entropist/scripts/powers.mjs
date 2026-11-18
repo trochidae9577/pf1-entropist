@@ -1,4 +1,9 @@
-import {baseBurn, matchPrerequisites, talentNames} from './rules.mjs';
+import {arrayElements,baseBurn, matchPrerequisites, talentNames} from './rules.mjs';
+
+export function normalizedElements(talent){
+  const aliases={'地':['土'],'：地':['土'],'：土':['土'],'风':['气'],'水木':['水','木']};
+  return [...new Set(talent.elements.flatMap(name=>aliases[name]??[name]))];
+}
 
 export function blastKind(talent){
   const match=talent.body.match(/念袭(?:性质|类型)\s*[:：]?\s*(物理|能量)/);
@@ -108,12 +113,46 @@ export function availablePowers(state,level,catalog){
   return result;
 }
 
+export function grantedBlasts(powers,state,actor){
+  return Array.from(powers.values(),grant=>grant.talent)
+    .filter(t=>t.kind==='blast'||t.kind==='composite')
+    .map(t=>{
+      if(t.id==='entropist-array-blast')return {...t,elements:arrayElements(state)};
+      if(t.en==='Water Blast')return {...t,bloodKineticist:Array.from(actor?.items??[]).some(i=>['class','feat'].includes(i.type)&&/血操念使|blood kineticist/i.test(i.name))};
+      return t;
+    });
+}
+
+export function linkInfusionBases(catalog){
+  const blasts=catalog.filter(t=>['blast','composite'].includes(t.kind));
+  const shorthand=s=>s.replace(/念袭$/,'');
+  for(const t of blasts.filter(t=>t.kind==='composite')){
+    const refs=[...t.body.matchAll(/可(?:以)?使用([^。；\n]{1,80}?)的(?:任何|所有|全部)?关联注能/g)];
+    const terms=new Set(refs.flatMap(m=>m[1].split(/以及|[、，,和与或]/).map(x=>shorthand(x.trim()))));
+    if(terms.size)t.infusionBases=blasts.filter(b=>b.id!==t.id&&blastNames(b).some(n=>terms.has(shorthand(n))));
+  }
+}
+
 export function matchesInfusion(infusion,blast){
+  return directMatch(infusion,blast)||(blast.infusionBases??[]).some(base=>directMatch(infusion,base));
+}
+
+function directMatch(infusion,blast){
   if(blast.id==='entropist-array-blast'&&infusion.elements.some(element=>blast.elements.includes(element)))return true;
+  if(/^(?:improved )?bloody infusion$/i.test(infusion.en)&&blast.en==='Water Blast'&&!blast.bloodKineticist)return false;
+  if(infusion.en==='Bullying Infusion'&&!infusion.associated)return true;
   const names=blastNames(blast);
   const associated=(infusion.associated??'').normalize('NFKC');
-  return associated.split(/[、,;；]/).some(raw=>{
+  if(/^任意简易或复合(?:念袭)?$/.test(associated))return true;
+  if(associated.includes('至少两种伤害类型的物理念袭')){
+    const line=blast.body.match(/伤害(?:类型)?\s*[:：]?\s*([^；\n]+)/)?.[1]??'';
+    return blastKind(blast)==='physical'&&(!/或/.test(line)||/一半.+一半|任意两种/.test(line))&&new Set(line.match(/钝击|穿刺|挥砍|火焰|强酸|寒冷|音波|闪电|电击|力场|负能量|正能量/g)).size>=2;
+  }
+  if(infusion.en?.toLowerCase()==='foxfire infusion')return ['Blue Flame Blast','Fire Blast','Positive Blast'].includes(blast.en);
+  return associated.replace(/\)\s+(?=[^()]+\()/g,'),').split(/[、,;；]|\s+或\s+|\bor\b/i).some(raw=>{
     const term=raw.trim().toLowerCase().replace(/^(?:或者?|and\b|or\b)\s*/i,'');
+    const english=term.match(/\(([a-z ]+)\)/)?.[1];
+    if(english&&blast.en?.toLowerCase()===english+' blast')return true;
     if(names.includes(term)||names.includes(term.replace(/\([^()]*\)/g,'').trim()))return true;
     if(/^(任意|任何|any)(?:念袭| blast)?$/i.test(term))return true;
     const generic=term.replace(/\s+/g,'').match(/^(?:任意|任何)(?:(物理|能量))?(?:(简易|复合))?念袭$/);
@@ -124,11 +163,28 @@ export function matchesInfusion(infusion,blast){
   });
 }
 
+export function infusionAvailability(talent,blasts){
+  if(!['form','substance'].includes(talent.kind))return null;
+  const names=blasts.filter(b=>matchesInfusion(talent,b)).map(b=>b.name);
+  return {usable:names.length>0,text:names.length?'当前可搭配：'+names.join('、'):'当前专注没有匹配的念袭',required:talent.associated||'见规则正文'};
+}
+
+export function infusionBurn(infusions,level){
+  const limit=Math.min(6,Math.max(0,Math.floor((level-2)/3)));
+  const costs=infusions.map(talent=>baseBurn(talent));
+  if(costs.includes(null))return {limit,raw:null,discount:null,net:null};
+  const raw=costs.reduce((sum,cost)=>sum+cost,0);
+  const discount=Math.min(limit,raw);
+  return {limit,raw,discount,net:raw-discount};
+}
+
+export function blastBurn(blast,level){
+  const cost=baseBurn(blast);
+  const limit=Number(blast.kind==='composite'&&level>=16);
+  return {cost,limit,net:cost===null?null:Math.max(0,cost-limit)};
+}
+
 export function comboBurn(blast,infusions,level){
-  const costs=[blast,...infusions].map(talent=>baseBurn(talent));
-  if(costs.includes(null))return null;
-  const specialization=level>=5?1+Math.floor((level-5)/3):0;
-  const base=Math.max(0,costs[0]-(blast.kind==='composite'&&level>=16?1:0));
-  const infusionCost=costs.slice(1).reduce((sum,cost)=>sum+cost,0);
-  return base+Math.max(0,infusionCost-specialization);
+  const base=blastBurn(blast,level).net,infusion=infusionBurn(infusions,level).net;
+  return base===null||infusion===null?null:base+infusion;
 }

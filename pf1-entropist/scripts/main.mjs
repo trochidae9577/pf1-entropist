@@ -2,7 +2,9 @@ import {ID,VERSION} from './rules.mjs';
 import {Controller,ask} from './controller.mjs';
 import {cleanImportedTalentDescriptions} from './adapter.mjs';
 import {escapeHTML as e} from './adapter.mjs';
+import {protectBurn,nativeRest} from './rest.mjs';
 import {bindSaveCard} from './saves.mjs';
+import {applyChronoDamage,configureBlastDamage} from './metakinesis.mjs';
 let controller;
 const panels=new Map();
 function selectedActor(){return canvas?.tokens?.controlled?.[0]?.actor??game.user.character;}
@@ -10,8 +12,14 @@ const LegacyApplication=globalThis.Application??foundry.appv1.api.Application;
 class EntropistPanel extends LegacyApplication{
   constructor(actor,options={}){super({...options,id:`pf1-entropist-${actor.id}`});this.actor=actor;}
   static get defaultOptions(){return foundry.utils.mergeObject(super.defaultOptions,{id:'pf1-entropist-panel',title:'熵术士原力',template:`modules/${ID}/templates/panel.hbs`,width:1080,height:800,resizable:true,classes:['pf1-entropist-window']});}
-  getData(){return {body:''};}
-  activateListeners(html){super.activateListeners(html);if(this.view)controller.views.delete(this.view);this.view=controller.mount(html[0]??html,this.actor);}
+  activateListeners(html){
+    super.activateListeners(html);
+    const element=html[0]??html;
+    const selector='[data-entropist-panel]';
+    const root=element.matches(selector)?element:element.querySelector(selector);
+    if(this.view)controller.views.delete(this.view);
+    this.view=controller.mount(root,this.actor);
+  }
   async close(options){if(this.view)controller.views.delete(this.view);panels.delete(this.actor.uuid);return super.close(options);}
 }
 async function open(actor=selectedActor()){
@@ -47,6 +55,10 @@ Hooks.once('ready',async()=>{
   try{
     const response=await fetch(`modules/${ID}/data/catalog.json`);if(!response.ok)throw new Error('无法读取原力资料库');
     controller=new Controller(await response.json());
+    Hooks.on('pf1CreateActionUse',configureBlastDamage);
+    Hooks.on('preUpdateActor',protectBurn);
+    Hooks.on('pf1PreActorRest',nativeRest);
+    Hooks.on('pf1PreDamageRoll',applyChronoDamage);
     game.modules.get(ID).api={open,daily:actor=>controller.daily(actor??selectedActor()),getDC:options=>import('./rules.mjs').then(m=>m.calculateDC(options)),controller,version:VERSION};
     controller.nativeBookAvailable=wrapOwnedUses();
     const MenuBase=globalThis.FormApplication??foundry.appv1.api.FormApplication;
